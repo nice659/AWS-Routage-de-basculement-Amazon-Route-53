@@ -1,0 +1,344 @@
+Activité : Routage de basculement Amazon Route 53
+Présentation de l'activité
+Dans cette activité, vous allez configurer le routage de basculement pour le site web Café.
+
+L'environnement d'activité commence avec deux instances Amazon EC2 déjà créées. 
+Chacune des instances dispose de la pile LAMP complète installée et du site web Café déployé et en cours d'exécution. 
+Les instances EC2 sont déployées dans différentes zones de disponibilité. 
+Par exemple, si les serveurs web s'exécutent dans la région eu-west-2, l'un des serveurs web s'exécutera dans la zone de 
+disponibilité eu-west-2a et l'autre dans eu-west-2b.
+
+Vous allez configurer votre domaine de telle sorte que, si le site web de la zone de disponibilité principale devient 
+indisponible, Amazon Route 53 bascule automatiquement le trafic d'application vers l'instance dans la zone de disponibilité
+ secondaire.
+
+Lorsque vous aurez terminé, votre environnement ressemblera à ce qui suit :
+
+diagramme d'architecture
+
+ 
+
+Objectifs de l'activité
+Après avoir terminé cette activité, vous serez en mesure d'effectuer les tâches suivantes :
+
+Configurer une vérification de l'état Route 53 qui envoie des e-mails quand l'état d'un point de terminaison HTTP cesse 
+d'être sain.
+Configurer un routage de basculement dans Amazon Route 53.
+ 
+
+Pertinence de l'étude de cas
+Nouvelle exigence commerciale pour Café : routage de basculement
+
+scène de Café
+
+De nombreux clients ont profité de la commande en ligne sur le site Café. 
+Ils aiment le fait que passer une commande en ligne garantit d'avoir les articles qu'ils veulent lorsqu'ils viennent au 
+café pour récupérer leur commande.
+
+Cependant, un incident s'est produit il y a deux jours et le site web est resté inaccessible la majeure partie 
+de la journée. Les clients ont exprimé leur frustration de ne pas pouvoir passer leur commande en ligne.
+
+Suite à cela, il vous a été demandé de vous assurer que cela ne se reproduise pas. Martha et Frank ont demandé si 
+vous pouviez configurer un déploiement de sauvegarde du site web pour que la sauvegarde prenne le relais si 
+le site web principal tombe en panne. Ils aimeraient également être avertis en cas d'indisponibilité du site principal.
+
+Une mission difficile vient de vous être confiée ! Il est temps de mettre à contribution votre compréhension 
+des serveurs DNS et du routage.
+
+ 
+
+Étapes de l'activité
+Durée : Cette activité dure environ 60 minutes.
+
+ 
+
+Accès à AWS Management Console
+En haut de ces instructions, cliquez sur Start Lab (Démarrer l'atelier) pour lancer votre atelier.
+
+Un volet Start Lab (Démarrer l'atelier) s'ouvre et affiche l'état de l'atelier.
+
+Attendez que le message « Lab status: ready » (Statut de l'atelier : prêt) s'affiche, puis cliquez sur le signe X pour fermer le volet Start Lab (Démarrer l'atelier).
+
+En haut de ces instructions, cliquez sur AWS.
+
+AWS Management Console s'ouvre dans un nouvel onglet de navigateur. Le système vous y connecte automatiquement.
+
+Conseil : si le nouvel onglet de navigateur ne s'ouvre pas, une bannière ou une icône s'affiche généralement en haut de votre navigateur pour indiquer que celui-ci bloque l'ouverture des fenêtres contextuelles du site. Cliquez sur la bannière ou l'icône et sélectionnez « Allow pop ups » (Autoriser les fenêtres contextuelles).
+
+Disposez l'onglet AWS Management Console (Console de gestion AWS) de façon à l'afficher à côté de ces instructions. Idéalement, vous devez pouvoir visualiser les deux onglets de navigateur à la fois, ce qui permet de suivre plus facilement les étapes de l'atelier.
+
+ 
+
+Tâche 1 : Confirmer les sites web et les localiser
+Dans cette tâche, vous allez analyser les ressources qui ont été créées automatiquement pour vous par AWS CloudFormation. Vous allez également modifier quelques paramètres dans AWS Systems Manager.
+
+Dans AWS Management Console, accédez au menu Services et cliquez sur VPC. Ensuite, à gauche de la page, sélectionnez Subnets (Sous-réseaux).
+
+Notez que deux sous-réseaux Cafe ont déjà été créés dans le VPC Cafe de ce compte.
+
+Dans le menu Services, choisissez EC2, puis cliquez sur Instances.
+
+Deux instances EC2 ont déjà été créées pour vous. CafeInstance1 s'exécute dans Cafe Public Subnet 1 (Sous-réseau public Cafe 1) et CafeInstance2 s'exécute dans Cafe Public Subnet 2 (Sous-réseau public Cafe 2).
+
+Cliquez sur CafeInstance1 et notez qu'un rôle IAM lui est appliqué.
+
+Le rôle permet aux applications s'exécutant sur l'instance d'accéder au service AWS Systems Manager.
+
+REMARQUE : l'instance CafeInstance2 est configurée de la même manière.
+
+Copiez la valeur du champ IPv4 Public IP (Adresse IP publique IPv4) du volet Description de CafeInstance1 et collez-la dans la barre d'adresse URL d'un nouvel onglet du navigateur.
+
+Un message « Hello From Your Web Server ! » (Bienvenue sur votre serveur web !) doit s'afficher.
+
+Ajoutez /cafe à la fin de l'URL et chargez cette page.
+
+Ce test confirme simplement que le site web Cafe principal est disponible.
+
+Revenez à la console EC2 et cliquez sur CafeInstance2. Copiez la valeur du champ IPv4 Public IP (Adresse IP publique IPv4) du volet Description de CafeInstance2 et collez-la dans la barre d'adresse URL d'un nouvel onglet du navigateur. Ajoutez /cafe à la fin de l'URL et chargez cette page.
+
+Le site web Cafe secondaire devrait également se charger.
+
+De retour dans AWS Management Console, dans le menu Services, choisissez Systems Manager, puis cliquez sur Parameter Store (Stockage de paramètres) qui se trouve sous Shared Resources (Ressources partagées) en bas à gauche de la page.
+
+Vous constatez la présence de sept paramètres.
+
+Cliquez sur le lien /cafe/currency et notez la valeur de la devise.
+
+Si les instances de serveur web Cafe sont exécutées dans la région de Londres, cliquez sur Edit (Modifier), dans le champ Value (Valeur), remplacez $ par £ et cliquez sur Save changes (Enregistrer les modifications).
+
+Remarque : selon la région d'exécution de vos instances de serveur web, vous pouvez modifier la devise.
+
+Si les instances sont exécutées dans un centre de données américain (par exemple, us-east-1), vous devez laisser la devise en $ (dollars américains).
+
+Toutefois, si les instances sont exécutées au Royaume-Uni et comme l'instance de serveur Cafe qui fournit les services aux clients britanniques utilise ce paramètre, la devise doit être en livres sterling et non pas en dollars américains.
+
+Cliquez à nouveau sur Parameter Store (Stockage de paramètres) pour revenir à la vue qui montre tous les paramètres définis, puis cochez la case en regard de /cafe/showServerInfo et cliquez sur Edit (Modifier).
+
+Dans le champ Value (Valeur), remplacez false par true et cliquez sur Save changes (Enregistrer les modifications).
+
+Remarque : si vous définissez showServerInfo sur true, des informations supplémentaires s'afficheront sur les pages web Cafe. Elles seront utiles lorsque vous passerez à l'étape de configuration de cette activité.
+
+Cliquez sur le lien /cafe/timeZone.
+
+Vous remarquerez que la valeur est actuellement définie sur America/New_York.
+
+Si vos serveurs web sont exécutés dans la région us-east-1, ce paramètre de fuseau horaire est approprié. Toutefois, si vos serveurs web s'exécutent ailleurs, vous pouvez éventuellement modifier le fuseau horaire afin que, lorsque des commandes sont passées sur le site web, l'horodatage de la commande reflète l'heure correcte.
+
+Par exemple, si vos serveurs web s'exécutent dans eu-west-2, qui est le centre de données de Londres, cliquez sur Edit (Modifier) et remplacez la valeur par Europe/London et cliquez sur Save changes (Enregistrer les modifications).
+
+Une liste de valeurs de fuseau horaire est disponible ici.
+
+Revenez à l'onglet du navigateur dans lequel vous avez ouvert le déploiement principal du site web Café et actualisez la page.
+
+Vous devriez voir qu'une section « Server Information » (Informations sur le serveur) s'affiche désormais sur la page web, juste sous la bannière Café.
+
+Cliquez sur le lien Menu.
+
+Vous devriez constater que la devise de chaque élément de menu s'affiche dans la devise que vous avez définie dans le paramètre AWS Systems Manager utilisé par ce site web.
+
+Essayez de soumettre une commande.
+
+Vous devriez voir que la page Order Confirmation (Confirmation de commande) indique l'heure à laquelle la commande a été passée, dans le fuseau horaire où le serveur web est en cours d'exécution.
+
+ 
+
+Tâche 2 : Configurer une vérification de l'état Amazon Route 53
+La première étape pour configurer le basculement consiste à créer une vérification de l'état pour votre site web principal.
+
+De retour dans AWS Management Console, dans le menu Services, choisissez Route 53.
+
+ Vous pouvez ignorer sans risque les messages d'erreur affichés en raison des restrictions IAM appliquées aux comptes d'atelier.
+
+Dans le panneau de navigation de gauche, cliquez sur Health checks (Vérifications de l'état).
+
+Cliquez sur Create health check (Créer une vérification de l'état) et configurez ce qui suit, en conservant les valeurs par défaut de tous les autres champs :
+
+Name (Nom) : Primary-Website-Health
+What to monitor (Éléments à surveiller) : Endpoint (Point de terminaison)
+Specify endpoint by (Spécifier le point de terminaison par) : IP address (Adresse IP)
+IP address (Adresse IP) : collez l'adresse IP publique IPv4 de CafeInstance1. Vous pouvez trouver cette valeur dans la console EC2, ou sélectionner Show (Afficher) dans le menu Détails (Détails) en haut de ces instructions et copier la valeur Instance1PublicIP.
+Path (Chemin) : cafe
+Développez  Advanced configuration (Configuration avancée) et configurez les paramètres suivants, en conservant les valeurs par défaut de tous les autres champs :
+
+Request interval (Intervalle de requête) : Fast (10 seconds) (Rapide [10 secondes])
+Failure threshold (Seuil d'échec) : 2
+Votre vérification de l'état répondra plus rapidement.
+
+Cliquez sur Next (Suivant).
+
+Configurez les paramètres suivants :
+
+Create alarm (Créer une alarme) : Yes (Oui)
+Send notification to (Envoyer une notification à) : New SNS topic (Nouvelle rubrique SNS)
+Topic name (Nom de la rubrique) : Primary-Website-Health
+Recipient email address (Adresse e-mail du destinataire) : saisissez une adresse e-mail à laquelle vous pouvez accéder.
+Cliquez sur Create health check (Créer une vérification de l'état).
+
+Route 53 vérifie à présent l'état de votre site en demandant régulièrement le nom de domaine que vous avez fourni et en vérifiant qu'il renvoie une réponse positive.
+
+La vérification de l'état peut prendre jusqu'à une minute pour afficher un état « Healthy » (Sain). Cliquez sur l'icône d'actualisation pour mettre à jour votre affichage de l'état actuel.
+
+Cochez la case correspondant à Primary-Website-Health, puis cliquez sur l'onglet Monitoring (Surveillance).
+
+Cela vous donne un aperçu du statut de la vérification de l'état au fil du temps. Il peut s'écouler quelques secondes avant que le graphique devienne disponible. Cliquez sur l'icône d'actualisation de section de page pour mettre à jour votre affichage.
+
+Consultez vos e-mails. Vous devriez avoir reçu un e-mail des Notifications AWS.
+
+Cliquez sur le lien Confirm subscription (Confirmer l'abonnement) contenu dans l'e-mail pour terminer la configuration de l'alerte par e-mail que vous avez configurée lors de la création de la vérification de l'état.
+
+ 
+
+Tâche 3 : Configurer des ensembles d'enregistrements Amazon Route 53
+ 
+
+Tâche 3.1 : Créer un enregistrement A pour le site web principal
+Vous allez maintenant configurer le routage de basculement en fonction de la vérification de l'état que vous venez de créer.
+
+De retour dans la console Route 53, dans le panneau de navigation de gauche, cliquez sur Hosted zones (Zones hébergées).
+
+Le nom de domaine XXXXXX_XXXXXXXXXX.vocareum.training, où les X sont des chiffres uniques à votre compte AWS, a déjà été créé pour vous.
+
+Tous les participants de l'atelier se sont vu attribuer un nom de domaine unique.
+
+Cliquez sur XXXXXX_XXXXXXXXXX.vocareum.training pour afficher les deux ensembles d'enregistrements qui existent déjà dans cette zone hébergée.
+
+Ces deux ensembles d'enregistrements ont été créés lorsque le domaine a été enregistré avec Route 53. L'enregistrement NS, ou Name Server (serveur de noms), répertorie les quatre serveurs de noms qui sont les serveurs de noms faisant autorité pour votre zone hébergée. Vous ne devez pas ajouter, modifier ni supprimer des serveurs de noms dans cet enregistrement.
+
+L'enregistrement de source de noms (SOA) identifie les informations DNS de base relatives au domaine. Il a également été créé lorsque le domaine a été enregistré avec Route 53.
+
+Cliquez sur Create record (Créer un enregistrement) et configurez les options suivantes :
+
+Record name (Nom de l'enregistrement) : www
+Record type (Type d'enregistrement) : A – Achemine le trafic vers une adresse IPv4 et certaines ressources AWS
+Value (Valeur) : dans la zone de texte qui s'affiche, saisissez l'adresse IP de Instance1PublicIP. Vous trouverez cette valeur en haut de ces instructions en choisissant le bouton Détails (Détails), puis en sélectionnant Show (Afficher).
+TTL (seconds) (TTL [secondes]) : 15
+Routing policy (Politique de routage) : Failover (Basculement)
+Failover record type (Type d'enregistrement de basculement) : Primary (Principal)
+Health Check (Vérification de l'état) : Primary-Website-Health
+Record ID (ID d'enregistrement) : FailoverPrimary
+Cliquez sur Create records (Créer des enregistrements).
+
+L'ensemble d'enregistrements de type A que vous venez de créer devrait désormais apparaître en tant que troisième ensemble d'enregistrements dans la zone hébergée.
+
+ 
+
+Tâche 3.2 : Créer un enregistrement A pour le site web secondaire
+Vous allez maintenant créer un autre ensemble d'enregistrements, cette fois pour le serveur web de sauvegarde.
+
+Cliquez sur Create Record (Créer un enregistrement) et configurez les options suivantes :
+
+Record name (Nom de l'enregistrement) : www
+Record type (Type d'enregistrement) : A – Achemine le trafic vers une adresse IPv4 et certaines ressources AWS
+Value (Valeur) : dans la zone de texte qui s'affiche, saisissez l'adresse IP de Instance2PublicIP. Vous trouverez cette valeur en haut de ces instructions en choisissant le bouton Détails (Détails), puis en sélectionnant Show (Afficher).
+TTL (seconds) (TTL [secondes]) : 15
+Routing policy (Politique de routage) : Failover (Basculement)
+Failover Record Type (Type d'enregistrement de basculement) : Secondary (Secondaire)
+Health Check (Vérification de l'état) : laissez ce champ vide
+Record ID (ID d'enregistrement) : FailoverSecondary
+Cliquez sur Create records (Créer des enregistrements).
+
+Un autre ensemble d'enregistrements de type A devrait désormais être répertorié.
+
+Vous avez maintenant configuré votre application web pour basculer vers une autre zone de disponibilité.
+
+ 
+
+Tâche 4 : Vérifier la résolution DNS
+Dans cette tâche, vous allez consulter les enregistrements DNS dans un navigateur afin de vérifier que Route 53 pointe correctement vers votre site web principal.
+
+Copiez la valeur Name (Nom) de l'un des deux enregistrements A que vous avez créés.
+
+Conseil : cliquez sur la case associée à l'un des enregistrements A. Un volet contenant le nom d'enregistrement s'affiche.
+
+Ouvrez un nouvel onglet de navigateur et collez le nom de l'enregistrement A, en supprimant le point final. En outre, ajoutez /cafe à la fin de l'URL. Chargez la page.
+
+Le site web principal Cafe devrait se charger, comme indiqué par la section des informations serveur de la page qui doit afficher la région/zone de disponibilité.
+
+Conseil : l'URL devrait être http://www.XXXXXX_XXXXXXXXXX.vocareum.training/cafe/ (les X correspondant à des chiffres uniques).
+
+ 
+
+Tâche 5 : Vérifier la fonctionnalité de basculement
+Dans cette tâche, vous allez essayer de vérifier que Route 53 bascule correctement vers votre serveur secondaire en cas de défaillance de votre serveur principal. Dans le cadre de cette activité, vous allez simuler une défaillance en arrêtant manuellement CafeInstance1.
+
+Retournez dans AWS Management Console. Dans le menu Services, cliquez sur EC2, puis choisissez Instances.
+
+Cochez la case en regard de CafeInstance1.
+
+Dans le menu Instance state (État de l'instance), cliquez sur Stop instance (Arrêter l'instance). Ensuite, si vous y êtes invité, cliquez sur Yes, Stop (Oui, arrêter).
+
+Le site web principal cessera alors de fonctionner. La vérification de l'état Route 53 que vous avez configurée remarquera que l'application ne répond pas et les entrées de l'ensemble d'enregistrements que vous avez configurées entraîneront le basculement du trafic DNS vers l'instance EC2 secondaire.
+
+Dans le menu Services, cliquez sur Route 53.
+
+Dans le panneau de navigation de gauche, cliquez sur Health checks (Vérifications de l'état).
+
+Sélectionnez  Primary-Website-Health, et dans le volet inférieur, cliquez sur Monitoring (Surveillance).
+
+Vous verrez les vérifications de l'état ayant échoué quelques minutes après l'arrêt de l'instance EC2.
+
+Attendez que le statut Primary-Website-Health affiche Unhealthy (Non sain). Si nécessaire, cliquez de temps en temps sur  Refresh (Actualiser). Cela peut prendre quelques minutes.
+
+Revenez à l'onglet du navigateur dans lequel le site web vocareum_XXXXXX_XXXXXXXXXX.training/cafe est ouvert et actualisez la page.
+
+Remarquez que la valeur Region/Availability Zone (Région/zone de disponibilité) affiche désormais une autre zone de disponibilité (par exemple, eu-west-2b au lieu de eu-west-2a). Vous voyez maintenant le site web diffusé à partir de votre instance CafeInstance2.
+
+Si vous n'obtenez pas les résultats corrects, confirmez à nouveau que Primary-Website-Health s'est enregistré comme Unhealthy (Non sain), puis réessayez. La propagation des modifications DNS peut prendre une minute ou deux.
+
+Consultez vos e-mails. Vous devriez avoir reçu un e-mail des Notifications AWS intitulé « ALARM: Primary-Website-Health-awsroute53-... » avec des détails concernant ce qui a déclenché l'alarme.
+
+Remarque : l'e-mail peut prendre quelques minutes à arriver.
+
+Vous avez maintenant confirmé avec succès que votre environnement d'application peut basculer de sa zone de disponibilité principale vers sa zone de disponibilité secondaire en cas de défaillance du serveur principal.
+
+ 
+
+Mise à jour du Café
+
+Propriétaires de Café gérant la comptabilité
+
+Nikhil et Sofîa ont une fois de plus impressionné tout le monde avec Café !
+
+Au cours des tests, Martha a reçu un e-mail l'informant que le site web principal était indisponible. Elle a raconté qu'elle a immédiatement vérifié le site web après avoir reçu l'alerte et qu'elle a été impressionnée de constater que le site web était toujours disponible et que des commandes pouvaient encore être passées. La solution de basculement qu'elle a demandée doit vraiment fonctionner !
+
+Les employés du café ont également mentionné qu'ils n'entendent plus les clients se plaindre de pannes du site web.
+
+ 
+
+Activité terminée
+ Félicitations ! Vous avez terminé l'activité.
+
+Cliquez sur End Lab (Terminer l'atelier) en haut de cette page, puis sur Yes (Oui) pour confirmer que vous souhaitez mettre fin à l'atelier.
+
+Un volet s'affiche et indique « DELETE has been initiated… You may close this message box now. » (Le processus de SUPPRESSION est lancé… Vous pouvez fermer cette boîte de message maintenant).
+
+Cliquez sur le signe X dans le coin supérieur droit pour fermer le panneau.
+
+ 
+
+Ressources supplémentaires
+Pour plus d'informations sur AWS Training and Certification, consultez https://aws.amazon.com/training/.
+
+Vos commentaires sont les bienvenus et sont appréciés.
+Si vous avez des suggestions à nous faire ou des corrections à nous proposer, faites-nous-en part dans le formulaire de contact AWS Training and Certification.
+
+© 2022, Amazon Web Services, Inc. et ses sociétés apparentées. Tous droits réservés. Ce cours ne peut être reproduit ou distribué, en partie ou dans son intégralité, sans l'autorisation écrite préalable d'Amazon Web Services, Inc. La copie, le prêt ou la vente à des fins commerciales sont interdits.
+
+
+Nom de la zone hébergée
+6781990_1700653043.vocareum.training
+ID de la zone hébergée
+Z02568882S8JA5KI2L117
+Description
+-
+Journal des requêtes
+-
+Type
+Zone hébergée publique
+Nombre d’enregistrements
+2
+Serveurs de noms
+ns-1005.awsdns-61.net
+ns-268.awsdns-33.com
+ns-1885.awsdns-43.co.uk
+ns-1165.awsdns-17.org
